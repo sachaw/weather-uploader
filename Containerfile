@@ -6,10 +6,11 @@ COPY . .
 
 RUN dnf install -y rust-toolset openssl-devel
 
-RUN cargo build --release
+RUN source /opt/rh/rust-toolset/enable && cargo build --release
 
 FROM registry.access.redhat.com/ubi10/ubi-minimal:latest
 
+ARG REPO_FULL_NAME
 LABEL org.opencontainers.image.title="weather-uploader" \
     org.opencontainers.image.description="Sensecap S1000 Weather Data Uploader" \
     org.opencontainers.image.vendor="sachaw" \
