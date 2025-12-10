@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN dnf install -y rust-toolset
+RUN dnf install -y rust-toolset openssl-devel
 
 RUN cargo build --release
 
