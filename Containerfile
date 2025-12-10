@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN dnf install -y rust-tools
+RUN dnf install -y rust-toolset
 
 RUN cargo build --release
 
