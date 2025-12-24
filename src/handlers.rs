@@ -22,25 +22,31 @@ pub async fn health_check() -> impl IntoResponse {
 // Handle metrics from Telegraf
 pub async fn handle_metrics(
     State(state): State<AppState>,
-    Json(metrics): Json<Vec<TelegrafMetric>>,
+    Json(metric): Json<TelegrafMetric>,
 ) -> impl IntoResponse {
-    info!("Received {} metrics from Telegraf", metrics.len());
+    info!("Received metric from Telegraf: {}", metric.name);
 
-    // Extract fields from weather measurement
+    if metric.name != "weather" {
+        warn!("Received non-weather metric: {}", metric.name);
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(UploadResponse {
+                success: false,
+                message: "Expected 'weather' metric".to_string(),
+            }),
+        );
+    }
+
+    // Extract fields
     let mut latest_fields = HashMap::new();
-
-    for metric in metrics {
-        if metric.name == "weather" {
-            for (field_name, value) in metric.fields {
-                if let Some(num) = value.as_f64() {
-                    latest_fields.insert(field_name, num);
-                }
-            }
+    for (field_name, value) in metric.fields {
+        if let Some(num) = value.as_f64() {
+            latest_fields.insert(field_name, num);
         }
     }
 
     if latest_fields.is_empty() {
-        warn!("No weather data found in metrics");
+        warn!("No fields found in weather metric");
         return (
             StatusCode::BAD_REQUEST,
             Json(UploadResponse {
