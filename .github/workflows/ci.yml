@@ -13,12 +13,14 @@ jobs:
         include:
           - runner: ubuntu-24.04
             platform: linux/amd64
+            arch: amd64
           - runner: ubuntu-24.04-arm
             platform: linux/arm64
+            arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Buildah Build
         id: build-container
@@ -26,8 +28,9 @@ jobs:
         with:
           containerfiles: |
             ./Containerfile
-          image: ${{github.event.repository.full_name}}
-          tags: latest ${{ github.sha }}
+          image: ${{ github.repository }}
+          tags: ${{ matrix.arch }}-latest ${{ matrix.arch }}-${{ github.sha }}
+          build-args: REPO_FULL_NAME=${{ github.repository }}
           oci: true
           platforms: ${{ matrix.platform }}
 
@@ -40,3 +43,33 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+  create-manifest:
+    needs: build-and-publish
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install Buildah
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y buildah
+
+      - name: Create and push manifest
+        env:
+          REGISTRY: ghcr.io
+          IMAGE: ${{ github.repository }}
+          USERNAME: ${{ github.actor }}
+          PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          buildah login --username "$USERNAME" --password "$PASSWORD" "$REGISTRY"
+
+          # For latest tag
+          buildah manifest create local-latest
+          buildah manifest add local-latest "$REGISTRY/$IMAGE:amd64-latest"
+          buildah manifest add local-latest "$REGISTRY/$IMAGE:arm64-latest"
+          buildah manifest push --all local-latest "docker://$REGISTRY/$IMAGE:latest"
+
+          # For SHA tag
+          buildah manifest create local-sha
+          buildah manifest add local-sha "$REGISTRY/$IMAGE:amd64-${{ github.sha }}"
+          buildah manifest add local-sha "$REGISTRY/$IMAGE:arm64-${{ github.sha }}"
+          buildah manifest push --all local-sha "docker://$REGISTRY/$IMAGE:${{ github.sha }}"
