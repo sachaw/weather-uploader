@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::conversions;
-use crate::models::{TelegrafMetric, UploadResponse, WeatherData};
+use crate::models::{Batch, MetricsInput, TelegrafMetric, UploadResponse, WeatherData};
 use crate::upload::{upload_to_pwsweather, upload_to_weather_underground};
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use std::collections::HashMap;
@@ -22,31 +22,30 @@ pub async fn health_check() -> impl IntoResponse {
 // Handle metrics from Telegraf
 pub async fn handle_metrics(
     State(state): State<AppState>,
-    Json(metric): Json<TelegrafMetric>,
+    Json(input): Json<MetricsInput>,
 ) -> impl IntoResponse {
-    info!("Received metric from Telegraf: {}", metric.name);
+    let metrics = match input {
+        MetricsInput::Batch(batch) => batch.metrics,
+        MetricsInput::Single(metric) => vec![metric],
+    };
 
-    if metric.name != "weather" {
-        warn!("Received non-weather metric: {}", metric.name);
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(UploadResponse {
-                success: false,
-                message: "Expected 'weather' metric".to_string(),
-            }),
-        );
-    }
+    info!("Received {} metrics from Telegraf", metrics.len());
 
-    // Extract fields
+    // Extract fields from weather measurement
     let mut latest_fields = HashMap::new();
-    for (field_name, value) in metric.fields {
-        if let Some(num) = value.as_f64() {
-            latest_fields.insert(field_name, num);
+
+    for metric in metrics {
+        if metric.name == "weather" {
+            for (field_name, value) in metric.fields {
+                if let Some(num) = value.as_f64() {
+                    latest_fields.insert(field_name, num);
+                }
+            }
         }
     }
 
     if latest_fields.is_empty() {
-        warn!("No fields found in weather metric");
+        warn!("No weather data found in metrics");
         return (
             StatusCode::BAD_REQUEST,
             Json(UploadResponse {

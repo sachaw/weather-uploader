@@ -17,6 +17,18 @@ pub struct UploadResponse {
     pub message: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct Batch {
+    pub metrics: Vec<TelegrafMetric>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum MetricsInput {
+    Batch(Batch),
+    Single(TelegrafMetric),
+}
+
 // Weather data extracted from Telegraf metrics
 #[derive(Debug, Default)]
 pub struct WeatherData {
